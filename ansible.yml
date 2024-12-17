@@ -1,0 +1,32 @@
+---
+- name: Execute Anonymization Script
+  hosts: "{{ lookup('env', 'REGION') }}"
+  gather_facts: no
+  tasks:
+    - name: ensure pexpect is installed in the playbook python
+      pip:
+        name: pexpect
+        state: present
+    - name: Synchronize specific files to target server
+      synchronize:
+        src: "/home/gitlab-runner/"
+        dest: "/home/gitlab-runner/"
+        mode: push
+        rsync_opts:
+          - "--include=anonymize-database.php"
+          - "--include=_common.php"
+          - "--include=backup-migrate.sh"
+          - "--exclude=*"
+    - name: Run the anonymization script
+      expect:
+        command: /usr/bin/php anonymize-database.php --site-abbr={{ lookup('env', 'SITE_ABBR') }} --prod-dbhost={{ lookup('env', 'PROD_DBHOST') }} --prod-dbport=3306 --anon-dbhost={{ lookup('env', 'REGION') }} --anon-dbport=3306 --dbuser=anon --include-audit-tables={{ lookup('env', 'INCLUDE_AUDIT_TABLES') }} --include-subject-duplicate-fields={{ lookup('env', 'INCLUDE_SUBJECT_DUPLICATE_FIELDS') }} --test-user-password={{ lookup('env', 'TEST_USER_PASSWORD') }}
+        timeout: 259200
+        responses:
+          'Backup file path \(optional, current snapshot will be taken if not provide\): ': ' '
+          'DB user password \(used for production and anon servers\): ': "{{ lookup('env', 'ANON_PASSWORD') }}"
+      register: command_output
+      ignore_errors: true
+    - name: Display command output
+      debug:
+        var: command_output.stdout_lines
+      failed_when: "'Error loading DB dump:' in command_output.stdout"

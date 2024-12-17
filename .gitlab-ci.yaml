@@ -1,0 +1,60 @@
+stages:
+  - db_fetch
+  - anonymize
+  - migrate
+
+db_fetch:
+  stage: db_fetch
+  script:
+    - /usr/bin/bash site_check.sh $SITE_ABBR > output.txt
+  artifacts:
+    paths:
+      - output.txt
+  rules:
+    - when: manual
+  tags:
+    - us
+
+anonymize_database:
+  stage: anonymize
+  script:
+    - export REGION=$(cat output.txt | cut -d ' ' -f 2)
+    - export PROD_DBHOST=$(echo $(cat output.txt) | cut -d ' ' -f 1)-rep
+    - ansible-playbook -i $INVENTORY_PATH ansible.yml --extra-vars "REGION=$REGION SITE_ABBR=$SITE_ABBR PROD_DBHOST=$PROD_DBHOST INCLUDE_AUDIT_TABLES=$INCLUDE_AUDIT_TABLES INCLUDE_SUBJECT_DUPLICATE_FIELDS=$INCLUDE_SUBJECT_DUPLICATE_FIELDS TEST_USER_PASSWORD=$TEST_USER_PASSWORD ANON_PASSWORD=$ANON_PASSWORD"
+  dependencies:
+    - db_fetch
+  when: on_success
+  needs: 
+    - job: db_fetch
+      artifacts: true
+  tags: 
+    - us
+
+migrate_db:
+  stage: migrate
+  script:
+    - /usr/bin/bash site_check.sh $SITE_ABBR > output.txt
+    - export REGION=$(cat output.txt | cut -d ' ' -f 2)
+    - ansible-playbook -i $INVENTORY_PATH migrate.yml --extra-vars "ANON_PASSWORD=$ANON_PASSWORD SITE_ABBR=$SITE_ABBR REGION=$REGION"
+  dependencies:
+    - anonymize_ctms_database
+  when: on_success
+  tags:
+    - us
+
+variables:
+  SITE_ABBR:
+    value: 'Site ID'
+    description: 'Enter Site ID'
+  INCLUDE_AUDIT_TABLES:
+    value: 'N'
+    options:
+      - 'Y'
+      - 'N'
+    description: 'Do you want Audit Trails?'
+  INCLUDE_SUBJECT_DUPLICATE_FIELDS:
+    value: 'N'
+    options:
+      - 'Y'
+      - 'N'
+    description: 'Do you want PHI Information?'

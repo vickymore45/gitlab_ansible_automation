@@ -1,0 +1,12 @@
+---
+- name: Execute Migrate Script
+  hosts: "{{ lookup('env', 'REGION') }}"
+  gather_facts: no
+  tasks:
+    - name: Run the migrate_db script
+      command: bash backup-migrate.sh -u anon -p {{ lookup('env', 'ANON_PASSWORD') }} -d {{ lookup('env', 'SITE_ABBR') }} -h <hostname>
+      register: command_output
+    - name: Display command output
+      debug:
+        var: command_output.stdout_lines
+

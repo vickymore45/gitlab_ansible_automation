@@ -1,1 +1,0 @@
-# gitlab_ansible_automation
